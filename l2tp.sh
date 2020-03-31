@@ -180,7 +180,7 @@ EOF
 cat /dev/null > /etc/ppp/chap-secrets
 cat /dev/null > /etc/ipsec.d/passwd
 VPN_USERS_NUMBER=`echo ${VPN_USERS_LIST} | awk -F ',' '{print NF}'`
-for i in `seq $num`
+for i in `seq ${VPN_USERS_NUMBER}`
 do
 	VPN_USER=`echo ${VPN_USERS_LIST} | awk -F ',' '{print $'$i'}'`
     VPN_USER_LOGIN=`echo ${VPN_USER} | awk -F ':' '{print $1}'`
