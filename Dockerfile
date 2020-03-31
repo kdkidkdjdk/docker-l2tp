@@ -2,11 +2,7 @@
 # Copyright (C) 2018 - 2019 Teddysun <i@teddysun.com>
 
 FROM alpine:latest
-LABEL maintainer="Teddysun <i@teddysun.com>"
-
-# COPY ipsec /etc/init.d/ipsec
-# COPY l2tp.sh /usr/bin/l2tp
-# COPY l2tpctl.sh /usr/bin/l2tpctl
+LABEL maintainer="Teddysun <i@teddysun.com>, xzl2021 <xzl2021#hotmail.com>"
 
 RUN apk add --no-cache ca-certificates openssl libreswan xl2tpd \
 	&& ipsec initnss \
