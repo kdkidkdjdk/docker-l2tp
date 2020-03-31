@@ -37,38 +37,49 @@ is_64bit(){
 
 # Environment file name
 l2tp_env_file="/etc/l2tp/l2tp.env"
-# Auto generated
-if [ -z "${VPN_IPSEC_PSK}" ] && [ -z "${VPN_USER}" ] && [ -z "${VPN_PASSWORD}" ]; then
-    if [ -f "${l2tp_env_file}" ]; then
-        echo "Loading previously generated environment variables for L2TP/IPSec VPN Server..."
-        . "${l2tp_env_file}"
-    else
-        echo "L2TP/IPSec VPN Server environment variables is not set. Use default environment variables..."
-        VPN_IPSEC_PSK="teddysun.com"
-        VPN_USER="vpnuser"
-        VPN_PASSWORD="$(rand)"
-        echo "VPN_IPSEC_PSK=${VPN_IPSEC_PSK}" > ${l2tp_env_file}
-        echo "VPN_USER=${VPN_USER}" >> ${l2tp_env_file}
-        echo "VPN_PASSWORD=${VPN_PASSWORD}" >> ${l2tp_env_file}
-        chmod 600 ${l2tp_env_file}
-    fi
+# Set Environment
+if [ -f "${l2tp_env_file}" ]; then
+    echo "Loading previously generated environment variables for L2TP/IPSec VPN Server..."
+    . "${l2tp_env_file}"
+else
+    echo "Environment file not found. Generate default one..."
+    cat > "${l2tp_env_file}" <<EOF
+# This file is part of L2TP/IPSec VPN Server Docker image.
+# Define your own values for these environment variables.
+# DO NOT put "" or '' around values, or add space around =
+# DO NOT use these special characters within values: \ " '
+
+VPN_IPSEC_PSK=psk123456
+VPN_USERS_LIST=test:123456,test2:123456
+VPN_PUBLIC_IP=
+VPN_L2TP_NET=192.168.18.0/24
+VPN_L2TP_LOCAL=192.168.18.1
+VPN_L2TP_REMOTE=192.168.18.10-192.168.18.250
+VPN_XAUTH_NET=192.168.20.0/24
+VPN_XAUTH_REMOTE=192.168.20.10-192.168.20.250
+VPN_DNS1=8.8.8.8
+VPN_DNS2=8.8.4.4
+VPN_SHA2_TRUNCBUG=no
+EOF
+    . "${l2tp_env_file}"
 fi
 
-# Environment variables:
-# VPN_IPSEC_PSK
-# VPN_USER
-# VPN_PASSWORD
-if [ -z "${VPN_IPSEC_PSK}" ] || [ -z "${VPN_USER}" ] || [ -z "${VPN_PASSWORD}" ]; then
-    echo "Error: Environment variables must be specified. please edit your environment file and retry again." >&2
-    exit 1
-fi
+# Check environment variables:
+VPN_L2TP_NET=${VPN_L2TP_NET:-'192.168.18.0/24'}
+VPN_L2TP_LOCAL=${VPN_L2TP_LOCAL:-'192.168.18.1'}
+VPN_L2TP_REMOTE=${VPN_L2TP_REMOTE:-'192.168.18.10-192.168.18.250'}
+VPN_XAUTH_NET=${VPN_XAUTH_NET:-'192.168.20.0/24'}
+VPN_XAUTH_REMOTE=${VPN_XAUTH_REMOTE:-'192.168.20.10-192.168.20.250'}
+VPN_DNS1=${VPN_DNS1:-'8.8.8.8'}
+VPN_DNS2=${VPN_DNS2:-'8.8.4.4'}
+VPN_SHA2_TRUNCBUG=${VPN_SHA2_TRUNCBUG:-'no'}
 
-if printf '%s' "${VPN_IPSEC_PSK} ${VPN_USER} ${VPN_PASSWORD}" | LC_ALL=C grep -q '[^ -~]\+'; then
+if printf '%s' "${VPN_IPSEC_PSK} ${VPN_USERS_LIST}" | LC_ALL=C grep -q '[^ -~]\+'; then
     echo "Error: Environment variables must not contain non-ASCII characters." >&2
     exit 1
 fi
 
-case "${VPN_IPSEC_PSK} ${VPN_USER} ${VPN_PASSWORD}" in
+case "${VPN_IPSEC_PSK} ${VPN_USERS_LIST}" in
     *[\\\"\']*)
     echo "Error: Environment variables must not contain these special characters like: \\ \" '"
     exit 1
@@ -77,36 +88,8 @@ esac
 
 # Environment variables:
 # VPN_PUBLIC_IP
-PUBLIC_IP=${VPN_PUBLIC_IP:-''}
-
-[ -z "${PUBLIC_IP}" ] && PUBLIC_IP=$( wget -qO- -t1 -T2 ipv4.icanhazip.com )
-[ -z "${PUBLIC_IP}" ] && PUBLIC_IP=$( wget -qO- -t1 -T2 ipinfo.io/ip )
-
-# Environment variables:
-# VPN_L2TP_NET
-# VPN_L2TP_LOCAL
-# VPN_L2TP_REMOTE
-# VPN_XAUTH_NET
-# VPN_XAUTH_REMOTE
-# VPN_DNS1
-# VPN_DNS2
-# VPN_SHA2_TRUNCBUG
-L2TP_NET=${VPN_L2TP_NET:-'192.168.18.0/24'}
-L2TP_LOCAL=${VPN_L2TP_LOCAL:-'192.168.18.1'}
-L2TP_REMOTE=${VPN_L2TP_REMOTE:-'192.168.18.10-192.168.18.250'}
-XAUTH_NET=${VPN_XAUTH_NET:-'192.168.20.0/24'}
-XAUTH_REMOTE=${VPN_XAUTH_REMOTE:-'192.168.20.10-192.168.20.250'}
-DNS1=${VPN_DNS1:-'8.8.8.8'}
-DNS2=${VPN_DNS2:-'8.8.4.4'}
-
-case ${VPN_SHA2_TRUNCBUG} in
-  [yY][eE][sS])
-    SHA2_TRUNCBUG=yes
-    ;;
-  *)
-    SHA2_TRUNCBUG=no
-    ;;
-esac
+[ -z "${VPN_PUBLIC_IP}" ] && VPN_PUBLIC_IP=$( wget -qO- -t1 -T2 ipv4.icanhazip.com )
+[ -z "${VPN_PUBLIC_IP}" ] && VPN_PUBLIC_IP=$( wget -qO- -t1 -T2 ipinfo.io/ip )
 
 # Create IPSec config
 cat > /etc/ipsec.conf <<EOF
@@ -116,11 +99,11 @@ config setup
     protostack=netkey
     uniqueids=no
     interfaces=%defaultroute
-    virtual-private=%v4:10.0.0.0/8,%v4:192.168.0.0/16,%v4:172.16.0.0/12,%v4:!${L2TP_NET},%v4:!${XAUTH_NET}
+    virtual-private=%v4:10.0.0.0/8,%v4:192.168.0.0/16,%v4:172.16.0.0/12,%v4:!${VPN_L2TP_NET},%v4:!${VPN_XAUTH_NET}
 
 conn shared
     left=%defaultroute
-    leftid=${PUBLIC_IP}
+    leftid=${VPN_PUBLIC_IP}
     right=%any
     encapsulation=yes
     authby=secret
@@ -133,7 +116,7 @@ conn shared
     ikev2=never
     ike=aes256-sha2,aes128-sha2,aes256-sha1,aes128-sha1,aes256-sha2
     phase2alg=aes_gcm-null,aes128-sha1,aes256-sha1,aes256-sha2_512,aes128-sha2,aes256-sha2
-    sha2-truncbug=${SHA2_TRUNCBUG}
+    sha2-truncbug=${VPN_SHA2_TRUNCBUG}
 
 conn l2tp-psk
     auto=add
@@ -146,8 +129,8 @@ conn l2tp-psk
 conn xauth-psk
     auto=add
     leftsubnet=0.0.0.0/0
-    rightaddresspool=${XAUTH_REMOTE}
-    modecfgdns=${DNS1},${DNS2}
+    rightaddresspool=${VPN_XAUTH_REMOTE}
+    modecfgdns=${VPN_DNS1},${VPN_DNS2}
     leftxauthserver=yes
     rightxauthclient=yes
     leftmodecfgserver=yes
@@ -164,8 +147,8 @@ cat > /etc/xl2tpd/xl2tpd.conf <<EOF
 port = 1701
 
 [lns default]
-local ip = ${L2TP_LOCAL}
-ip range = ${L2TP_REMOTE}
+local ip = ${VPN_L2TP_LOCAL}
+ip range = ${VPN_L2TP_REMOTE}
 require chap = yes
 refuse pap = yes
 require authentication = yes
@@ -178,8 +161,8 @@ cat > /etc/ppp/options.xl2tpd <<EOF
 +mschap-v2
 ipcp-accept-local
 ipcp-accept-remote
-ms-dns ${DNS1}
-ms-dns ${DNS2}
+ms-dns ${VPN_DNS1}
+ms-dns ${VPN_DNS2}
 noccp
 auth
 mtu 1280
@@ -194,18 +177,27 @@ cat > /etc/ipsec.secrets <<EOF
 %any  %any  : PSK "${VPN_IPSEC_PSK}"
 EOF
 
-if ! grep -qw "${VPN_USER}" /etc/ppp/chap-secrets 2>/dev/null; then
-    cat > /etc/ppp/chap-secrets <<EOF
-${VPN_USER} l2tpd ${VPN_PASSWORD} *
-EOF
-fi
+cat /dev/null > /etc/ppp/chap-secrets
+cat /dev/null > /etc/ipsec.d/passwd
+VPN_USERS_NUMBER=`echo ${VPN_USERS_LIST} | awk -F ',' '{print NF}'`
+for (( i=1; i<=$VPN_USERS_NUMBER; i++ ))
+do
+	VPN_USER=`echo ${VPN_USERS_LIST} | awk -F ',' '{print $'$i'}'`
+    VPN_USER_LOGIN=`echo ${VPN_USER} | awk -F ':' '{print $1}'`
+	VPN_USER_PASSWORD=`echo ${VPN_USER} | awk -F ':' '{print $2}'`
 
-VPN_PASSWORD_ENC=$(openssl passwd -1 "${VPN_PASSWORD}")
-if ! grep -qw "${VPN_USER}" /etc/ipsec.d/passwd 2>/dev/null; then
-    cat > /etc/ipsec.d/passwd <<EOF
-${VPN_USER}:${VPN_PASSWORD_ENC}:xauth-psk
-EOF
-fi
+    # Check credentials value:
+    # VPN_USER_LOGIN 
+    # VPN_USER_PASSWORD
+    if [ -z "${VPN_USER_LOGIN}" ] || [ -z "${VPN_USER_PASSWORD}" ]; then
+        echo "Error: VPN_IPSEC_PSK or VPN_USERS_LIST value illegal. Please edit your environment file and retry again." >&2
+        exit 1
+    fi
+
+    echo "${VPN_USER_LOGIN} l2tpd ${VPN_USER_PASSWORD} *" >> /etc/ppp/chap-secrets
+	VPN_USER_PASSWORD_ENC=$(openssl passwd -1 "$VPN_USER_PASSWORD")
+	echo "${VPN_USER_LOGIN}:${VPN_USER_PASSWORD_ENC}:xauth-psk" >> /etc/ipsec.d/passwd
+done
 
 chmod 600 /etc/ipsec.secrets /etc/ppp/chap-secrets /etc/ipsec.d/passwd
 
@@ -244,23 +236,12 @@ iptables -I INPUT 6 -p udp --dport 1701 -j DROP
 iptables -I FORWARD 1 -m conntrack --ctstate INVALID -j DROP
 iptables -I FORWARD 2 -i eth+ -o ppp+ -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 iptables -I FORWARD 3 -i ppp+ -o eth+ -j ACCEPT
-iptables -I FORWARD 4 -i ppp+ -o ppp+ -s "${L2TP_NET}" -d "${L2TP_NET}" -j ACCEPT
-iptables -I FORWARD 5 -i eth+ -d "${XAUTH_NET}" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-iptables -I FORWARD 6 -s "${XAUTH_NET}" -o eth+ -j ACCEPT
+iptables -I FORWARD 4 -i ppp+ -o ppp+ -s "${VPN_L2TP_NET}" -d "${VPN_L2TP_NET}" -j ACCEPT
+iptables -I FORWARD 5 -i eth+ -d "${VPN_XAUTH_NET}" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+iptables -I FORWARD 6 -s "${VPN_XAUTH_NET}" -o eth+ -j ACCEPT
 iptables -A FORWARD -j DROP
-iptables -t nat -I POSTROUTING -s "${XAUTH_NET}" -o eth+ -m policy --dir out --pol none -j MASQUERADE
-iptables -t nat -I POSTROUTING -s "${L2TP_NET}" -o eth+ -j MASQUERADE
-
-cat <<EOF
-
-L2TP/IPsec VPN Server with the Username and Password is below:
-
-Server IP: ${PUBLIC_IP}
-IPSec PSK: ${VPN_IPSEC_PSK}
-Username : ${VPN_USER}
-Password : ${VPN_PASSWORD}
-
-EOF
+iptables -t nat -I POSTROUTING -s "${VPN_XAUTH_NET}" -o eth+ -m policy --dir out --pol none -j MASQUERADE
+iptables -t nat -I POSTROUTING -s "${VPN_L2TP_NET}" -o eth+ -j MASQUERADE
 
 # Load IPsec kernel module
 modprobe af_key
