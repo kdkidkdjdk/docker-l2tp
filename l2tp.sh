@@ -1,5 +1,5 @@
 #!/bin/sh
-PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
+PATH=${PATH}:/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export PATH
 #
 # This is a Shell script for configure and start L2TP/IPSec VPN server with Docker image
@@ -36,7 +36,7 @@ is_64bit(){
 }
 
 # Environment file name
-l2tp_env_file="/etc/l2tp.env"
+l2tp_env_file="/etc/l2tp/l2tp.env"
 # Auto generated
 if [ -z "${VPN_IPSEC_PSK}" ] && [ -z "${VPN_USER}" ] && [ -z "${VPN_PASSWORD}" ]; then
     if [ -f "${l2tp_env_file}" ]; then
